@@ -1,1 +1,1 @@
-# spatial-experimental-design
+# Optimizing experimental design for spatial transcriptomics studies

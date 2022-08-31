@@ -162,7 +162,12 @@ for dd in range(n_candidate_designs):
 
     # Compute EIG
     noise_variance = np.exp(kernel.k2.theta[0])
-    eigs[dd] = 0.5 * np.linalg.slogdet(1 / noise_variance * cov + np.eye(len(curr_observed_idx)))[1]
+    eigs[dd] = (
+        0.5
+        * np.linalg.slogdet(1 / noise_variance * cov + np.eye(len(curr_observed_idx)))[
+            1
+        ]
+    )
 
 curr_best_design_idx = np.argmax(eigs)
 curr_best_design = designs[curr_best_design_idx]
@@ -307,7 +312,12 @@ for iternum in range(1, n_experimental_iters):
 
             # Compute EIG for each slice through this fragment
             noise_variance = np.exp(gpr.kernel_.k2.theta[0])
-            curr_eig = 0.5 * np.linalg.slogdet(1 / noise_variance * cov + np.eye(len(curr_observed_idx)))[1]
+            curr_eig = (
+                0.5
+                * np.linalg.slogdet(
+                    1 / noise_variance * cov + np.eye(len(curr_observed_idx))
+                )[1]
+            )
 
             if curr_eig > best_eig:
                 best_design_idx = dd
@@ -318,7 +328,9 @@ for iternum in range(1, n_experimental_iters):
     curr_best_design = designs[best_design_idx]
     print(curr_best_design)
     best_fragment_X = X[X_fragment_idx[best_fragment_idx]]
-    import ipdb; ipdb.set_trace()
+    import ipdb
+
+    ipdb.set_trace()
 
     above_fragment_idx = np.where(
         best_fragment_X[:, 1]

@@ -158,7 +158,6 @@ def fit_variational_model(
                 )
             )
             # print(get_params(opt_state))
-            
 
     fitted_params = get_params(opt_state)
     return fitted_params
@@ -208,7 +207,6 @@ def predict_one(x, sample):
 
 @jit
 def eig_calculation(denominator_loglikelihoods, log_numerator):
-    
 
     n_inner_samples = denominator_loglikelihoods.shape[1]
     log_denominator_mean = logsumexp(denominator_loglikelihoods, axis=1) - jnp.log(
@@ -223,9 +221,11 @@ def eig_calculation(denominator_loglikelihoods, log_numerator):
 def sample_bernoulli(p):
     return random.bernoulli(key=variational_model.key, p=p)
 
+
 @jit
 def bernoulli_logpmf(p, x):
     return bernoulli.logpmf(p=p, k=x)
+
 
 @jit
 def nmc(
@@ -236,7 +236,6 @@ def nmc(
 ):
 
     # design = jnp.array(design)
-    
 
     param_samples, param_samples_for_y = sample_params(variational_params)
 
@@ -244,14 +243,12 @@ def nmc(
         param_samples
     ).squeeze(axis=-1)
 
-    logit_p_for_y = vmap(
-        lambda s: vmap(lambda x: predict_one(x.reshape(1, -1), s))(X)
-    )(param_samples_for_y).squeeze(axis=-1)
+    logit_p_for_y = vmap(lambda s: vmap(lambda x: predict_one(x.reshape(1, -1), s))(X))(
+        param_samples_for_y
+    ).squeeze(axis=-1)
 
     # Sample imaginary data
-    y_samples = vmap(lambda p: sample_bernoulli(p=p))(
-        logit_p_for_y
-    ).astype(int)
+    y_samples = vmap(lambda p: sample_bernoulli(p=p))(logit_p_for_y).astype(int)
 
     # Evaluate likelihood of synthetic data
     log_numerator_individual = vmap(lambda lp, y: bernoulli_logpmf(p=lp, x=y))(
@@ -264,15 +261,15 @@ def nmc(
         lambda y: bernoulli_logpmf(p=logit_p, x=y)
     )(y_samples)
 
-    denominator_individual_loglikelihoods = denominator_individual_loglikelihoods * design.reshape(1, 1, -1)
+    denominator_individual_loglikelihoods = (
+        denominator_individual_loglikelihoods * design.reshape(1, 1, -1)
+    )
     denominator_loglikelihoods = jnp.sum(denominator_individual_loglikelihoods, axis=2)
-
 
     eig = eig_calculation(denominator_loglikelihoods, log_numerator)
     # import ipdb; ipdb.set_trace()
 
     return eig
-
 
 
 def get_points_near_line(slope, X, intercept=0):
@@ -282,12 +279,10 @@ def get_points_near_line(slope, X, intercept=0):
     # return dists <= slice_radius
 
 
-
 if __name__ == "__main__":
     # variational_model = ApproximateModel()
 
     model = Model(prior_mean=prior_mean, prior_stddev=onp.sqrt(prior_variance))
-
 
     n_experimental_iters = 5
     limits = [-3, 3]
@@ -301,12 +296,10 @@ if __name__ == "__main__":
     norms = onp.linalg.norm(X - center, axis=1)
     Y = (norms < radius).astype(int)
 
-
     # Randomly flip some of the tumor cells to be healthy
     tumor_idx = onp.where(Y == 1)[0]
     flip_list = onp.random.binomial(n=1, p=0.8, size=len(tumor_idx))
     # Y[tumor_idx] = flip_list
-
 
     slice_radius = 0.1
 
@@ -327,7 +320,6 @@ if __name__ == "__main__":
     # idx_for_designs = onp.random.choice(onp.arange(len(X)), size=200, replace=False)
     # Xs_for_designs = X[idx_for_designs]
     # Xs_for_designs = [x.reshape(1, -1) for x in Xs_for_designs]
-
 
     Xs_for_designs = []
     for ii, dd in enumerate(candidate_designs):
@@ -358,7 +350,6 @@ if __name__ == "__main__":
                 model_object=model,
             )
             # print(fitted_params)
-
 
             # radius_estimated = onp.exp(fitted_params[0] + 0.5 * jnp.exp(fitted_params[4]) ** 2)
             # slope_estimated = fitted_params[1]
@@ -453,26 +444,27 @@ if __name__ == "__main__":
         observed_idx.extend(best_observed_idx)
 
     plt.close()
-    fig, axs = plt.subplots(1, 3, figsize=(17, 5), gridspec_kw={"width_ratios": [1, 1, 1]})
+    fig, axs = plt.subplots(
+        1, 3, figsize=(17, 5), gridspec_kw={"width_ratios": [1, 1, 1]}
+    )
 
     plt.sca(axs[0])
     for c in [0, 1]:
         curr_idx = onp.where(Y == c)[0]
-        plt.scatter(X[curr_idx, 0], X[curr_idx, 1], label="Healthy" if c == 0 else "Tumor")
+        plt.scatter(
+            X[curr_idx, 0], X[curr_idx, 1], label="Healthy" if c == 0 else "Tumor"
+        )
     plt.title("Data")
     plt.axis("off")
-
-
-
-
 
     radius_estimated = onp.exp(fitted_params[0] + 0.5 * jnp.exp(fitted_params[4]) ** 2)
     slope_estimated = fitted_params[1]
     center_estimated = fitted_params[2:4]
     preds = model.predict(X, radius_estimated, slope_estimated, center_estimated)
 
-
-    intercepts_naive = onp.linspace(limits[0], limits[1], n_experimental_iters + 2)[1:-1]
+    intercepts_naive = onp.linspace(limits[0], limits[1], n_experimental_iters + 2)[
+        1:-1
+    ]
     slopes_naive = onp.zeros(n_experimental_iters)
     candidate_designs_naive = onp.stack([intercepts_naive, slopes_naive]).T
 
@@ -483,7 +475,6 @@ if __name__ == "__main__":
         observed_idx_naive.extend(curr_observed_idx.tolist())
 
     observed_idx_naive = onp.array(observed_idx_naive)
-
 
     plt.sca(axs[1])
     observed_idx = onp.array(observed_idx)
@@ -498,10 +489,8 @@ if __name__ == "__main__":
             label="Healthy" if c == 0 else "Tumor",
         )
 
-
     plt.title("Naive slices")
     plt.axis("off")
-
 
     plt.sca(axs[2])
     plt.scatter(X[:, 0], X[:, 1], color="gray", alpha=0.5)

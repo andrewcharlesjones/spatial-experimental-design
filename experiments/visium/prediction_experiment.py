@@ -54,6 +54,7 @@ top_gene_name = adata.uns["moranI"].index.values[0]
 ## Extract and normalize/standardize data
 X = adata.obsm["spatial"].astype(float)
 Y = np.array(adata[:, top_gene_name].X.todense()).squeeze()
+Y_full = np.array(adata[:, adata.uns["moranI"].index.values[:30]].X.todense()).squeeze()
 
 X -= X.min(0)
 X /= X.max(0)
@@ -63,8 +64,11 @@ X -= 5
 Y = (Y - Y.mean()) / Y.std()
 
 
-n_iters = 5
-kernel = RBF() + WhiteKernel()
+Y = mvn.rvs(mean=np.zeros(len(X)), cov=RBF()(X) + 1e-3 * np.eye(len(X)))
+
+
+
+n_iters = 6
 
 # When we take a slice, all points within this
 # distance to the line/plane are "observed"
@@ -79,6 +83,7 @@ slopes = np.tan(slope_angles)
 intercepts = np.linspace(
     np.min(X[:, 0]) + 1, np.max(X[:, 0]) - 1, n_intercept_discretizations
 )
+# intercepts = np.random.choice(np.unique(X[:, 1]), size=n_intercept_discretizations, replace=False)
 designs1, designs2 = np.meshgrid(intercepts, slopes)
 candidate_designs = np.vstack([designs1.ravel(), designs2.ravel()]).T
 
@@ -97,11 +102,14 @@ for iternum in range(n_iters):
     assert len(X_fragment_idx) == iternum + 1
 
     if len(observed_idx) > 0:
+        kernel = RBF() + WhiteKernel()
         gpr = GPR(kernel=kernel)
         gpr.fit(
             X[np.unique(observed_idx)],
             Y[np.unique(observed_idx)],
         )
+
+        print(gpr.kernel_.k2.theta)
 
     best_eig = -np.inf
     best_design_idx, best_fragment_idx, best_observed_idx = None, None, None
@@ -132,6 +140,7 @@ for iternum in range(n_iters):
                 continue
 
             if iternum == 0:
+                kernel = RBF() + WhiteKernel()
                 cov = kernel(curr_X[curr_observed_idx])
                 noise_variance = np.exp(kernel.k2.theta[0])
             else:
@@ -173,19 +182,19 @@ for iternum in range(n_iters):
     ## Run prediction
     train_idx = np.array(observed_idx)
     test_idx = np.setdiff1d(np.arange(len(X)), train_idx)
-    X_train, Y_train = X[train_idx], Y[train_idx]
-    X_test, Y_test = X[test_idx], Y[test_idx]
+    X_train, Y_train = X[train_idx], Y_full[train_idx]
+    X_test, Y_test = X[test_idx], Y_full[test_idx]
 
     gpr = GPR(kernel=kernel)
     gpr.fit(X_train, Y_train)
     preds = gpr.predict(X_test)
+    # import ipdb; ipdb.set_trace()
     curr_r2 = r2_score(Y_test, preds)
     r2_scores[iternum] = curr_r2
 
 
-## Random slice
 
-
+## Random design
 
 n_repeats = 10
 r2_scores_random = np.zeros((n_repeats, n_iters))
@@ -239,9 +248,10 @@ for rep_ii in range(n_repeats):
 
         train_idx = np.array(observed_idx_random)
         test_idx = np.setdiff1d(np.arange(len(X)), train_idx)
-        X_train, Y_train = X[train_idx], Y[train_idx]
-        X_test, Y_test = X[test_idx], Y[test_idx]
+        X_train, Y_train = X[train_idx], Y_full[train_idx]
+        X_test, Y_test = X[test_idx], Y_full[test_idx]
 
+        kernel = RBF() + WhiteKernel()
         gpr = GPR(kernel=kernel)
         gpr.fit(X_train, Y_train)
         preds = gpr.predict(X_test)
@@ -250,12 +260,54 @@ for rep_ii in range(n_repeats):
 
 
 
+## Naive design
+
+r2_scores_naive = np.zeros(n_iters)
+
+slopes = np.zeros(n_iters)
+intercepts = np.linspace(
+    np.min(X[:, 0]), np.max(X[:, 0]), n_iters + 2
+)[1:-1]
+designs1, designs2 = np.meshgrid(intercepts, slopes)
+designs_naive = np.vstack([designs1.ravel(), designs2.ravel()]).T
+
+observed_idx_naive = []
+
+for iternum in range(n_iters):
+
+    curr_design = designs_naive[iternum]
+
+    curr_observed_idx = get_points_near_line(
+        X=X,
+        slope=curr_design[1],
+        intercept=curr_design[0],
+        slice_radius=slice_radius,
+    )
+    observed_idx_naive.extend(
+        curr_observed_idx.tolist()
+    )
+
+    train_idx = np.array(observed_idx_naive)
+    test_idx = np.setdiff1d(np.arange(len(X)), train_idx)
+    X_train, Y_train = X[train_idx], Y_full[train_idx]
+    X_test, Y_test = X[test_idx], Y_full[test_idx]
+
+    kernel = RBF() + WhiteKernel()
+    gpr = GPR(kernel=kernel)
+    gpr.fit(X_train, Y_train)
+    preds = gpr.predict(X_test)
+    curr_r2 = r2_score(Y_test, preds)
+    r2_scores_naive[iternum] = curr_r2
+
+
+
 plt.figure(figsize=(14, 5))
 
 plt.subplot(121)
 plt.scatter(X[:, 0], X[:, 1], c="gray", alpha=0.5)
-plt.scatter(X[np.array(observed_idx), 0], X[np.array(observed_idx), 1], label="Designed", color="blue")
 plt.scatter(X[np.array(observed_idx_random), 0], X[np.array(observed_idx_random), 1], label="Random", color="orange")
+plt.scatter(X[np.array(observed_idx_naive), 0], X[np.array(observed_idx_naive), 1], label="Naive", color="green")
+plt.scatter(X[np.array(observed_idx), 0], X[np.array(observed_idx), 1], label="Designed", color="blue")
 plt.axis("off")
 plt.legend([],[], frameon=False)
 plt.tight_layout()
@@ -263,10 +315,12 @@ plt.tight_layout()
 plt.subplot(122)
 
 results_df = pd.DataFrame({"iter": np.arange(1, n_iters + 1), "r2": r2_scores})
+results_df_naive = pd.DataFrame({"iter": np.arange(1, n_iters + 1), "r2": r2_scores_naive})
 results_df_random = pd.melt(pd.DataFrame(r2_scores_random))
 results_df_random["variable"] += 1
 
 sns.lineplot(data=results_df, x="iter", y="r2", label="Designed", color="blue")
+sns.lineplot(data=results_df_naive, x="iter", y="r2", label="Naive", color="green")
 sns.lineplot(
     data=results_df_random,
     x="variable",
