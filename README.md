@@ -2,3 +2,6 @@
 
 Repository contents:
 - `experiments/`
+- `models/`
+- `tests/`
+- `utils/`
