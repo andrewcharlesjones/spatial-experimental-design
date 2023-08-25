@@ -4,3 +4,10 @@ sandbox/
 *.png
 *.pyc
 .DS_Store
+*.svg
+*.pdf
+*.csv
+*.tsv
+__pycache__/
+.ipynb_checkpoints/
+*.txt
